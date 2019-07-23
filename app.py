@@ -4,6 +4,7 @@ import discord
 import datetime
 import requests
 from discord.ext import commands
+import secret
 
 bot = commands.Bot(command_prefix="!", description="Commands to get OWL info")
 
@@ -43,7 +44,7 @@ async def rightnow(ctx):
 async def _player(ctx, playerName: str):
     """Gets player details from api.overwatchleague.com"""
     if playerName == None:
-        await ctx.send("Which Player do you want to view?")
+        await ctx.send("Which player do you want to view?")
     else:
         d = OWLPy.Driver()
         player = d.get_player_by_name(playerName)
@@ -77,31 +78,46 @@ async def _player(ctx, playerName: str):
 async def _team(ctx, teamName: str):
     """Gets player details from api.overwatchleague.com"""
     if teamName == None:
-        await ctx.send("Which Player do you want to view?")
+        await ctx.send("Which team do you want to view?")
+    else:
+        try:
+            d = OWLPy.Driver()
+            team = d.get_team_by_name(teamName)
+            embed = discord.Embed(title=team.name, colour=discord.Colour(int(team.colors.primary)), url=team.website, description="{}".format(team.name), timestamp=datetime.datetime.utcfromtimestamp(1563783616))
+
+            embed.set_image(url=team.logo["altDark"]["png"])
+            # embed.set_thumbnail(url=player["headshot"])
+            embed.set_author(name="OWL-Bot", url="https://discordapp.com", icon_url="https://cdn.discordapp.com/embed/avatars/0.png")
+            embed.set_footer(text="Provided by OWLPy, Spydernaz", icon_url="https://cdn.discordapp.com/embed/avatars/0.png")
+
+            embed.add_field(name="Team:", value=team.name)
+            embed.add_field(name="Location:", value=team.location, inline=True)
+
+            embed.add_field(name="Social Media Accounts for {}".format(team.name), value=".")
+            for a in team.accounts:
+                embed.add_field(name=a.type, value=a.url, inline=True)
+                
+            # embed.add_field(name="😱", value="try exceeding some of them!")
+            # embed.add_field(name="🙄", value="an informative error should show up, and this view will remain as-is until all issues are fixed")
+            # embed.add_field(name="<:thonkang:219069250692841473>", value="these last two", inline=True)
+            # embed.add_field(name="<:thonkang:219069250692841473>", value="are inline fields", inline=True)
+
+            #await ctx.send(content="this `supports` __a__ **subset** *of* ~~markdown~~ 😃 ```js\nfunction foo(bar) {\n  console.log(bar);\n}\n\nfoo(1);```", embed=embed)
+            await ctx.send(content="Here is some info on {}".format(team.name), embed=embed)
+        except OWLPy.errors.customerrors.TeamNotFound as e:
+            await ctx.send("we couldnt find a team by the name of {}. If it is a multi-word team try wrapping \"quotes\" around it".format(teamName))
+
+
+@owl.command(name='schedule')
+async def _schedule(ctx, s: str):
+    """Gets player details from api.overwatchleague.com"""
+    if s.lower() == "help":
+        await ctx.send("Options are \na. <team>: enter a team name for their next 3 games\nb. <round>: enter a round number\nc. \"next\": for the next week")
+    elif s == None:
+        await ctx.send("Which schedule do you want to view?\n Type ```!owl schedule help``` for help")
     else:
         d = OWLPy.Driver()
-        team = d.get_team_by_name(teamName)
-        embed = discord.Embed(title=team.name, colour=discord.Colour(int(team.colors.primary)), url=team.website, description="{}".format(team.name), timestamp=datetime.datetime.utcfromtimestamp(1563783616))
-
-        embed.set_image(url=team.logo["altDark"]["png"])
-        # embed.set_thumbnail(url=player["headshot"])
-        embed.set_author(name="OWL-Bot", url="https://discordapp.com", icon_url="https://cdn.discordapp.com/embed/avatars/0.png")
-        embed.set_footer(text="Provided by OWLPy, Spydernaz", icon_url="https://cdn.discordapp.com/embed/avatars/0.png")
-
-        embed.add_field(name="Team:", value=team.name)
-        embed.add_field(name="Location:", value=team.location, inline=True)
-
-        embed.add_field(name="Social Media Accounts for {}".format(team.name), value=".")
-        for a in team.accounts:
-            embed.add_field(name=a.type, value=a.url, inline=True)
-            
-        # embed.add_field(name="😱", value="try exceeding some of them!")
-        # embed.add_field(name="🙄", value="an informative error should show up, and this view will remain as-is until all issues are fixed")
-        # embed.add_field(name="<:thonkang:219069250692841473>", value="these last two", inline=True)
-        # embed.add_field(name="<:thonkang:219069250692841473>", value="are inline fields", inline=True)
-
-        #await ctx.send(content="this `supports` __a__ **subset** *of* ~~markdown~~ 😃 ```js\nfunction foo(bar) {\n  console.log(bar);\n}\n\nfoo(1);```", embed=embed)
-        await ctx.send(content="Here is some info on {}".format(team.name), embed=embed)
+        await ctx.send("getting schedule for {}".format(s))
 
 
-bot.run("NjAxMDY2ODY0OTQwMTU0ODgx.XS9fuw.ZSYTyeFgY84FBmCa8zC26fREUGc")
+bot.run(secret.botPWD)
