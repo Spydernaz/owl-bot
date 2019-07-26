@@ -3,23 +3,62 @@ import OWLPy
 import discord
 import datetime
 import requests
+from bs4 import BeautifulSoup as bs
 from discord.ext import commands
+from discord.utils import get
+
 import secret
 
 bot = commands.Bot(command_prefix="!", description="Commands to get OWL info")
-
+reactions = {}
+ManagementChannel = 0
 
 @bot.event
 async def on_ready():
     print('Logged in as')
     print(bot.user.name)
     print(bot.user.id)
+    print(bot.guilds)
     print('------')
     await bot.change_presence(status=discord.Status.online, activity=discord.Game(name="Testing Version 0.01"))
 
 
 
+@bot.event
+async def on_raw_reaction_add(payload):
+    print("found a reaction of {}".format(str(payload.emoji)))
+    global ManagementChannel
+    if payload.channel_id != ManagementChannel:
+        print("whoops wrong channel, {}:{}".format(payload.channel_id, ManagementChannel))
+        return
+    
+    server = bot.get_guild(payload.guild_id)
+    user = server.get_member(payload.user_id)
+    try:
+        if reactions[str(payload.emoji)]:
+            Role = server.get_role(int(reactions[str(payload.emoji)]))
+            print("applying role {} to {}".format(Role.name, user.name))
+            await user.add_roles(Role)
+    except:
+        pass
 
+@bot.event
+async def on_raw_reaction_remove(payload):
+    print("found a reaction of {}".format(str(payload.emoji)))
+    global ManagementChannel
+    if payload.channel_id != ManagementChannel:
+        print("whoops wrong channel, {}:{}".format(payload.channel_id, ManagementChannel))
+        return
+    
+    server = bot.get_guild(payload.guild_id)
+    user = server.get_member(payload.user_id)
+    try:
+        if reactions[str(payload.emoji)]:
+            Role = server.get_role(int(reactions[str(payload.emoji)]))
+            print("applying role {} to {}".format(Role.name, user.name))
+            await user.remove_roles(Role)
+    except Exception as e:
+        print(e)
 
 @bot.group()
 async def owl(ctx):
@@ -28,6 +67,22 @@ async def owl(ctx):
     """
     if ctx.invoked_subcommand is None:
         await ctx.send('Yeah? What do you want?')
+
+@owl.group()
+async def setup(ctx):
+    if ctx.invoked_subcommand is None:
+        await ctx.send('Yeah? What do you want to setup?')
+
+@setup.command(name="channel")
+async def _channel(ctx, channel: int):
+    global ManagementChannel
+    ManagementChannel = int(channel)
+    await ctx.send('saved management channel')
+
+@setup.command(name="roles")
+async def _channel(ctx, emoji: str, role: int):
+    reactions[emoji] = role
+    await ctx.send('added reaction role')
 
 @owl.command(name="help")
 async def _list(ctx):
@@ -119,5 +174,7 @@ async def _schedule(ctx, s: str):
         d = OWLPy.Driver()
         await ctx.send("getting schedule for {}".format(s))
 
+
+### Use https://playoverwatch.com/en-us/career/pc/Spydernaz-1124 to confirm hero times
 
 bot.run(secret.botPWD)
