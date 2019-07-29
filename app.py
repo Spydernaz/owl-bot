@@ -1,4 +1,5 @@
 import json
+import glob
 import OWLPy
 import discord
 import datetime
@@ -11,7 +12,19 @@ import secret
 
 bot = commands.Bot(command_prefix="!", description="Commands to get OWL info")
 reactions = {}
-ManagementChannel = 0
+
+def setup_auth(function):
+    def check_auth(ctx):
+        if "admin" in reactions[ctx.guild.id].keys():
+            adminrole = ctx.guild.get_role(int(reactions[str(ctx.guild.id)]["admin"]))
+            if adminrole in ctx.author.roles:
+                return function(ctx)
+            else:
+                return ctx.send("not authorised")
+        else:
+            return function(ctx)
+    return check_auth
+
 
 @bot.event
 async def on_ready():
@@ -19,24 +32,33 @@ async def on_ready():
     print(bot.user.name)
     print(bot.user.id)
     print(bot.guilds)
+    for g in bot.guilds:
+        reactions[str(g.id)] = {}
+    for file in glob.glob("settings/*.config"):
+        sguild = file.split('/')[1].split('.')[0]
+        try:
+            with open('settings/{}.config'.format(sguild), 'r') as f:
+                reactions[sguild] = json.load(f)
+        except:
+            print("ignoring file {} as there was an error".format(sguild))
     print('------')
-    await bot.change_presence(status=discord.Status.online, activity=discord.Game(name="Testing Version 0.01"))
+    await bot.change_presence(status=discord.Status.online, activity=discord.Game(name="v1.0.0"))
 
 
 
 @bot.event
 async def on_raw_reaction_add(payload):
+    """Assign a role to someone based on the user's reaction"""
     print("found a reaction of {}".format(str(payload.emoji)))
-    global ManagementChannel
-    if payload.channel_id != ManagementChannel:
-        print("whoops wrong channel, {}:{}".format(payload.channel_id, ManagementChannel))
+    if payload.channel_id != reactions[str(payload.guild_id)]["ManagementChannel"]:
+        print("whoops wrong channel, {}:{}".format(payload.channel_id, reactions[payload.guild_id]["ManagementChannel"]))
         return
     
     server = bot.get_guild(payload.guild_id)
     user = server.get_member(payload.user_id)
     try:
-        if reactions[str(payload.emoji)]:
-            Role = server.get_role(int(reactions[str(payload.emoji)]))
+        if reactions[str(payload.guild_id)][str(payload.emoji)]:
+            Role = server.get_role(int(reactions[str(payload.guild_id)][str(payload.emoji)]))
             print("applying role {} to {}".format(Role.name, user.name))
             await user.add_roles(Role)
     except:
@@ -44,17 +66,17 @@ async def on_raw_reaction_add(payload):
 
 @bot.event
 async def on_raw_reaction_remove(payload):
+    """Removes someone from a role based on the user's reaction"""
     print("found a reaction of {}".format(str(payload.emoji)))
-    global ManagementChannel
-    if payload.channel_id != ManagementChannel:
+    if payload.channel_id != reactions[str(payload.guild_id)]["ManagementChannel"]:
         print("whoops wrong channel, {}:{}".format(payload.channel_id, ManagementChannel))
         return
     
     server = bot.get_guild(payload.guild_id)
     user = server.get_member(payload.user_id)
     try:
-        if reactions[str(payload.emoji)]:
-            Role = server.get_role(int(reactions[str(payload.emoji)]))
+        if reactions[str(payload.guild_id)][str(payload.emoji)]:
+            Role = server.get_role(int(reactions[str(payload.guild_id)][str(payload.emoji)]))
             print("applying role {} to {}".format(Role.name, user.name))
             await user.remove_roles(Role)
     except Exception as e:
@@ -62,31 +84,58 @@ async def on_raw_reaction_remove(payload):
 
 @bot.group()
 async def owl(ctx):
-    """Says if a user is cool.
-    In reality this just checks if a subcommand is being invoked.
-    """
+    """check for a sub-command (setup or owl specific)"""
     if ctx.invoked_subcommand is None:
         await ctx.send('Yeah? What do you want?')
 
+
+
+
+################################################################################### Setup for Reaction Roles
 @owl.group()
 async def setup(ctx):
     if ctx.invoked_subcommand is None:
         await ctx.send('Yeah? What do you want to setup?')
 
+@setup_auth
+@setup.command(name="setadmin")
+async def _setadmin(ctx, role: int):
+    """assigns a welcome channel to listen to reactions on"""
+    reactions[str(ctx.guild.id)]["admin"] = int(role)
+    await ctx.send('saved admin role, now only people with this role can configure your bot')
+
+@setup_auth
 @setup.command(name="channel")
 async def _channel(ctx, channel: int):
-    global ManagementChannel
-    ManagementChannel = int(channel)
+    """assigns a welcome channel to listen to reactions on"""
+    reactions[str(ctx.guild.id)]["ManagementChannel"] = int(channel)
     await ctx.send('saved management channel')
 
+@setup_auth
 @setup.command(name="roles")
 async def _channel(ctx, emoji: str, role: int):
-    reactions[emoji] = role
+    """Assigns a reaction to a role"""
+    reactions[str(ctx.guild.id)][emoji] = role
     await ctx.send('added reaction role')
 
+@setup.command(name="save")
+async def _save(ctx):
+    """saves the config to a file"""
+    with open('settings/{}.config'.format(ctx.guild.id), 'w') as file:
+        json.dump(reactions[str(ctx.guild.id)], file)
+    await ctx.send("successfully saved the configuration!")
+
+@setup.command(name="load")
+async def _load(ctx):
+    """loads config from a file"""
+    with open('settings/{}.config'.format(ctx.guild.id), 'r') as file:
+        reactions[str(ctx.guild.id)] = json.load(file)
+
+
+################################################################################### OWL Functionality
 @owl.command(name="help")
-async def _list(ctx):
-    """Gets the current match details from api.overwatchleague.com"""
+async def _help(ctx):
+    """displays help information"""
     await ctx.send("No hooting way!")
 
 
@@ -127,11 +176,9 @@ async def _player(ctx, playerName: str):
         #await ctx.send(content="this `supports` __a__ **subset** *of* ~~markdown~~ 😃 ```js\nfunction foo(bar) {\n  console.log(bar);\n}\n\nfoo(1);```", embed=embed)
         await ctx.send(content="Here is some info on {}".format(player.formatted_name()), embed=embed)
 
-
-
 @owl.command(name='team')
 async def _team(ctx, teamName: str):
-    """Gets player details from api.overwatchleague.com"""
+    """Gets team details from api.overwatchleague.com"""
     if teamName == None:
         await ctx.send("Which team do you want to view?")
     else:
